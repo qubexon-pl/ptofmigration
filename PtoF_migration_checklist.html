@@ -857,9 +857,17 @@
   (function initLogo(){
     const img = document.getElementById("logoImg");
     const ph = document.getElementById("logoPlaceholder");
-    img.crossOrigin = "anonymous";
-    img.referrerPolicy = "no-referrer";
-    img.src = BRAND.logoFile;
+    const logoUrl = new URL(BRAND.logoFile, document.baseURI);
+    const isHttpLogo = logoUrl.protocol === "http:" || logoUrl.protocol === "https:";
+
+    // Only request CORS for remote HTTP(S) assets.
+    // For local file paths (file://), forcing crossOrigin can prevent loading.
+    if (isHttpLogo) {
+      img.crossOrigin = "anonymous";
+      img.referrerPolicy = "no-referrer";
+    }
+
+    img.src = logoUrl.href;
     img.onload = () => { img.classList.remove("d-none"); ph.classList.add("d-none"); };
     img.onerror = () => { /* keep placeholder */ };
   })();
