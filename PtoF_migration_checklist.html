@@ -663,6 +663,18 @@
   // =========================
   // STYLED PDF EXPORT (captures HTML)
   // =========================
+  function isSafeCanvasImageSrc(src) {
+    if (!src) return true;
+    if (src.startsWith("data:") || src.startsWith("blob:")) return true;
+
+    try {
+      const url = new URL(src, window.location.href);
+      return url.origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
+
   async function exportStyledPdf() {
     const expandHelpers = document.getElementById("expandForPdf").checked;
     const collapses = Array.from(document.querySelectorAll(".collapse"));
@@ -672,45 +684,61 @@
 
     updateUI();
 
-    const root = document.getElementById("printRoot");
-    const canvas = await html2canvas(root, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: null,
-      scrollY: -window.scrollY
-    });
+    try {
+      const root = document.getElementById("printRoot");
+      const canvas = await html2canvas(root, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: null,
+        scrollY: -window.scrollY,
+        onclone: (doc) => {
+          const imgs = Array.from(doc.querySelectorAll("img"));
+          imgs.forEach((img) => {
+            const src = img.getAttribute("src") || "";
+            if (!isSafeCanvasImageSrc(src)) {
+              img.style.visibility = "hidden";
+            }
+          });
+        }
+      });
 
-    const imgData = canvas.toDataURL("image/png");
+      const imgData = canvas.toDataURL("image/png");
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF("p", "pt", "a4");
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("p", "pt", "a4");
 
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    let y = 0;
-    let remaining = imgHeight;
+      let y = 0;
+      let remaining = imgHeight;
 
-    while (remaining > 0) {
-      pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
-      remaining -= pageHeight;
+      while (remaining > 0) {
+        pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
+        remaining -= pageHeight;
 
-      if (remaining > 0) {
-        pdf.addPage();
-        y -= pageHeight; // shift up for next slice
+        if (remaining > 0) {
+          pdf.addPage();
+          y -= pageHeight; // shift up for next slice
+        }
       }
+
+      pdf.save("Fabric_Migration_Checklist_Styled.pdf");
+    } catch (err) {
+      console.error("Unable to export styled PDF.", err);
+      alert("PDF export failed because one or more cross-origin images do not allow canvas access. Use a local/same-origin logo or remove external images and try again.");
+    } finally {
+      // Restore collapse states
+      collapses.forEach((el, idx) => {
+        if (prevStates[idx]) el.classList.add("show");
+        else el.classList.remove("show");
+      });
+      updateUI();
     }
-
-    pdf.save("Fabric_Migration_Checklist_Styled.pdf");
-
-    // Restore collapse states
-    collapses.forEach((el, idx) => {
-      if (prevStates[idx]) el.classList.add("show");
-      else el.classList.remove("show");
-    });
   }
 
   // =========================
@@ -729,6 +757,8 @@
   (function initLogo(){
     const img = document.getElementById("logoImg");
     const ph = document.getElementById("logoPlaceholder");
+    img.crossOrigin = "anonymous";
+    img.referrerPolicy = "no-referrer";
     img.src = BRAND.logoFile;
     img.onload = () => { img.classList.remove("d-none"); ph.classList.add("d-none"); };
     img.onerror = () => { /* keep placeholder */ };
