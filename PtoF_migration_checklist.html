@@ -735,6 +735,12 @@
 
     try {
       const root = document.getElementById("printRoot");
+      const rootRect = root.getBoundingClientRect();
+      const breakCandidatesCssPx = Array.from(root.querySelectorAll(".step-box, .card"))
+        .map((el) => Math.round(el.getBoundingClientRect().top - rootRect.top))
+        .filter((value) => value > 0)
+        .sort((a, b) => a - b);
+
       const canvas = await html2canvas(root, {
         scale: 2,
         useCORS: true,
@@ -752,7 +758,6 @@
         }
       });
 
-      const imgData = canvas.toDataURL("image/png");
 
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF("p", "pt", "a4");
@@ -760,20 +765,65 @@
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const margin = 24;
+      const printableWidth = pageWidth - margin * 2;
+      const printableHeight = pageHeight - margin * 2;
+      const pxPerPt = canvas.width / printableWidth;
+      const maxSliceHeightPx = Math.floor(printableHeight * pxPerPt);
 
-      let y = 0;
-      let remaining = imgHeight;
+      const rootHeightCssPx = Math.max(root.scrollHeight, rootRect.height);
+      const canvasPerCssPx = canvas.height / rootHeightCssPx;
+      const breakCandidatesCanvasPx = breakCandidatesCssPx.map((value) => Math.round(value * canvasPerCssPx));
 
-      while (remaining > 0) {
-        pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
-        remaining -= pageHeight;
+      const minSliceHeightPx = Math.floor(maxSliceHeightPx * 0.6);
+      const snapWindowPx = Math.max(48, Math.floor(maxSliceHeightPx * 0.18));
 
-        if (remaining > 0) {
-          pdf.addPage();
-          y -= pageHeight; // shift up for next slice
+      let currentY = 0;
+      let pageIndex = 0;
+
+      while (currentY < canvas.height) {
+        let sliceHeight = Math.min(maxSliceHeightPx, canvas.height - currentY);
+        const proposedBreak = currentY + sliceHeight;
+
+        if (proposedBreak < canvas.height) {
+          const minBreak = currentY + minSliceHeightPx;
+          const bestBreak = breakCandidatesCanvasPx
+            .filter((point) => point >= minBreak && point <= proposedBreak)
+            .pop();
+
+          if (bestBreak && proposedBreak - bestBreak <= snapWindowPx) {
+            sliceHeight = bestBreak - currentY;
+          }
         }
+
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+
+        const ctx = pageCanvas.getContext("2d");
+        ctx.drawImage(
+          canvas,
+          0,
+          currentY,
+          canvas.width,
+          sliceHeight,
+          0,
+          0,
+          canvas.width,
+          sliceHeight
+        );
+
+        const pageData = pageCanvas.toDataURL("image/png");
+        const renderedHeight = sliceHeight / pxPerPt;
+
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
+        pdf.addImage(pageData, "PNG", margin, margin, printableWidth, renderedHeight);
+
+        currentY += sliceHeight;
+        pageIndex += 1;
       }
 
       pdf.save("Fabric_Migration_Checklist_Styled.pdf");
