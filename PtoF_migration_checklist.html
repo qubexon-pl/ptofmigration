@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Premium ➜ Fabric Capacity Migration Manual</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- jsPDF + html2canvas (for styled PDF export) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    :root{
+      --brand-primary:#2b579a;
+      --brand-accent:#00a3a3;
+      --brand-bg:#f6f8fb;
+    }
+    body{ background:var(--brand-bg); }
+    .brand-badge{ background:linear-gradient(135deg,var(--brand-primary),var(--brand-accent)); color:#fff; }
+    .card{ border:0; border-radius:16px; }
+    textarea.form-control{ border-radius:12px; resize:vertical; }
+    .helper-box{ background:#fff; border:1px solid rgba(0,0,0,.08); border-radius:14px; padding:12px; }
+    .small-muted{ color:rgba(0,0,0,.6); font-size:.9rem; }
+    .logo-box{
+      width:56px;height:56px;border-radius:12px;background:#fff;border:1px dashed rgba(0,0,0,.25);
+      display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,.5);font-size:12px;
+    }
+    .logo-img{
+      width:56px;height:56px;border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.08);
+      object-fit:contain;padding:6px;
+    }
+    .step-box{
+      border:1px solid rgba(0,0,0,.08);
+      border-radius:16px;
+      background:#fff;
+      padding:14px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container my-4 my-lg-5" id="printRoot">
+
+  <!-- Header -->
+  <div class="card shadow-sm p-3 p-md-4 mb-3">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+
+      <div class="d-flex align-items-center gap-3">
+        <!-- Put logo.png in the same folder to show logo -->
+        <img id="logoImg" class="logo-img d-none" alt="Company logo">
+        <div id="logoPlaceholder" class="logo-box" title="Add logo.png to same folder to show logo">Logo</div>
+
+        <div>
+          <div class="badge brand-badge rounded-pill px-3 py-2 mb-2">Migration Manual</div>
+          <h3 class="m-0" id="programTitle">Premium Per Capacity ➜ Microsoft Fabric Capacity</h3>
+          <div class="small-muted">Static checklist + step-by-step validation. Export/Import via files. Styled PDF export keeps layout.</div>
+        </div>
+      </div>
+
+      <div class="text-md-end">
+        <div class="mb-2">
+          <strong id="progressPct">0%</strong> complete (<span id="doneCount">0</span>/<span id="totalCount">0</span>)
+        </div>
+
+        <div class="progress" style="height:10px;border-radius:999px;">
+          <div id="progressBar" class="progress-bar" role="progressbar"
+               style="width:0%; background:linear-gradient(135deg,var(--brand-primary),var(--brand-accent));"
+               aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-md-end mt-3 flex-wrap">
+          <button class="btn btn-primary" id="btnExportPdf">Export to PDF (styled)</button>
+
+          <button class="btn btn-outline-secondary" id="btnExportJson">Export JSON</button>
+          <label class="btn btn-outline-secondary mb-0">
+            Import JSON
+            <input id="fileImportJson" type="file" accept="application/json" hidden>
+          </label>
+
+          <button class="btn btn-outline-secondary" id="btnExportCsv">Export CSV</button>
+
+          <div class="form-check form-switch ms-md-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="expandForPdf">
+            <label class="form-check-label" for="expandForPdf">Expand helper sections before PDF</label>
+          </div>
+        </div>
+
+        <div class="small-muted mt-2">
+          Tip: JSON keeps your progress + comments and can be re-imported later.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content"></div>
+
+  <div class="text-center small-muted my-4">
+    Tip: Keep workspaces idle during reassignment; active jobs may be canceled and may need rerun, while schedules remain.
+  </div>
+</div>
+
+<!-- Bootstrap JS (collapse) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // =========================
+  // CONFIG / BRANDING
+  // =========================
+  const BRAND = {
+    companyName: "Your Company",
+    logoFile: "logo.png" // optional; put it next to this HTML
+  };
+
+  // =========================
+  // CHECKLIST / MANUAL DATA
+  // Adjusted to match Microsoft guidance flow
+  // =========================
+  const SECTIONS = [
+    {
+      phase: "0) Readiness & Constraints (before buying anything)",
+      items: [
+        {
+          id: "r1",
+          title: "Confirm P-SKU renewal/end date and plan migration waves",
+          why: "Align cutover with your contract timeline and reduce risk by migrating in waves.",
+          helper: [
+            "Confirm renewal/end date with procurement/account rep.",
+            "Create migration waves: pilot → wave 1 → wave 2.",
+            "Pick low-risk pilot workspaces first.",
+            "Schedule migration when workspaces are idle."
+          ],
+          validate: [
+            "Renewal/end date documented.",
+            "Wave plan created with owners and dates.",
+            "Migration window communicated."
+          ],
+          notesHint: "Renewal date, owners, wave plan link..."
+        },
+        {
+          id: "r2",
+          title: "Plan to use the post-end access window (avoid paying for both)",
+          why: "Plan migration timing so you can complete reassignment without double-paying.",
+          helper: [
+            "Confirm when P-SKU billing ends.",
+            "Schedule the migration within the access window you have after end-of-term.",
+            "Track weekly progress (moved vs remaining)."
+          ],
+          validate: [
+            "End date confirmed.",
+            "Timeline fits your allowed access window.",
+            "Tracking exists (sheet/report)."
+          ],
+          notesHint: "End date, tracking location..."
+        },
+        {
+          id: "r3",
+          title: "Decide region strategy (critical limitation)",
+          why: "Cross-region movement can be blocked for non-Power BI Fabric items and certain scenarios; choose the Fabric region carefully.",
+          helper: [
+            "Identify current Power BI capacity region.",
+            "Plan Fabric capacity in the same region.",
+            "Flag workspaces with Fabric items (lakehouse/notebook/warehouse etc.)."
+          ],
+          validate: [
+            "Current region documented.",
+            "Target Fabric region matches plan.",
+            "List of workspaces with Fabric items created."
+          ],
+          notesHint: "Current region, target region, blocked workspaces..."
+        },
+        {
+          id: "r4",
+          title: "Confirm licensing expectations (authors vs viewers)",
+          why: "Most orgs still need Pro for authors; validate viewer access expectations based on capacity hosting and your licensing model.",
+          helper: [
+            "List authors (publish/edit) vs viewers (consume only).",
+            "Confirm internal licensing assumptions (Pro/PPU/Fabric Free viewer scenarios).",
+            "Communicate the final decision."
+          ],
+          validate: [
+            "Author/viewer groups identified.",
+            "Licensing decision documented.",
+            "Stakeholders informed."
+          ],
+          notesHint: "Who needs Pro, viewer expectations..."
+        }
+      ]
+    },
+
+    {
+      phase: "1) Purchase & Provision Fabric Capacity (Azure)",
+      items: [
+        {
+          id: "b1",
+          title: "Verify prerequisites to buy Fabric capacity reservation (roles + subscription type)",
+          why: "Purchasing reservations requires specific roles and eligible subscription types; confirm EA/CSP rules if applicable.",
+          helper: [
+            "Confirm Owner or Reservation Purchaser role on an eligible Azure subscription.",
+            "If EA: verify Reserved Instances policy requirements.",
+            "If CSP: confirm purchasing role (admin/sales agent)."
+          ],
+          validate: [
+            "Purchasing identity + subscription confirmed.",
+            "EA/CSP policy prerequisites confirmed (if applicable)."
+          ],
+          notesHint: "Buyer identity, subscription type, EA/CSP notes..."
+        },
+        {
+          id: "b2",
+          title: "Buy Microsoft Fabric reservation (recommended) in the matching region",
+          why: "Reservation aligns costs; choosing the matching region helps avoid move limitations.",
+          helper: [
+            "Azure portal → Reservations → Microsoft Fabric.",
+            "Select subscription + scope (subscription or resource group).",
+            "Select region matching current Power BI capacity region.",
+            "Choose CU quantity → Review + Buy."
+          ],
+          validate: [
+            "Reservation purchased and visible in Azure.",
+            "Scope documented.",
+            "Region confirmed."
+          ],
+          notesHint: "Reservation ID, scope, region, CU qty..."
+        },
+        {
+          id: "b3",
+          title: "Register Microsoft.Fabric resource provider",
+          why: "The subscription must have the Microsoft.Fabric resource provider registered before creating capacity.",
+          helper: [
+            "Azure portal → Subscription → Resource providers (Settings).",
+            "Search for Microsoft.Fabric.",
+            "Select Register.",
+            "Use same subscription (and resource group if scoped) as reservation."
+          ],
+          validate: [
+            "Provider status shows Registered.",
+            "Subscription alignment confirmed."
+          ],
+          notesHint: "Who registered it, date/time..."
+        },
+        {
+          id: "b4",
+          title: "Create Fabric capacity (F-SKU) with correct region and capacity admin",
+          why: "You must select subscription, resource group, region, size (CUs), and assign a capacity administrator.",
+          helper: [
+            "Azure portal → Microsoft Fabric service → Create Fabric capacity.",
+            "Select subscription + resource group (aligned with reservation scope).",
+            "Choose region (match Power BI region).",
+            "Select size (CUs) and set capacity administrator → Create."
+          ],
+          validate: [
+            "Fabric capacity exists and is running.",
+            "Capacity admin can manage it in Power BI Admin portal."
+          ],
+          notesHint: "Capacity name, SKU/CUs, admin..."
+        }
+      ]
+    },
+
+    {
+      phase: "2) Enable Fabric (Tenant + Capacity controls)",
+      items: [
+        {
+          id: "e1",
+          title: "Enable Fabric at tenant level (optionally scoped to security groups)",
+          why: "Tenant settings control whether users can create Fabric items, and can be limited to groups.",
+          helper: [
+            "Power BI Admin portal → Tenant settings.",
+            "Microsoft Fabric → enable 'Users can create Fabric items'.",
+            "Optionally restrict to specific security groups.",
+            "Apply changes."
+          ],
+          validate: [
+            "Tenant setting enabled and scoped correctly.",
+            "Pilot user test behaves as intended."
+          ],
+          notesHint: "Group scope + rationale..."
+        },
+        {
+          id: "e2",
+          title: "Capacity-level override (enable/disable Fabric per capacity if needed)",
+          why: "Capacity admins can override tenant recommendation per capacity.",
+          helper: [
+            "Admin portal → Capacity settings → select Fabric capacity.",
+            "Delegate tenant settings tab → Microsoft Fabric.",
+            "Enable 'Override tenant admin selection'.",
+            "Toggle enabled/disabled and optionally scope groups → Apply."
+          ],
+          validate: [
+            "Override behaves as intended for this capacity.",
+            "Scope validated with test users."
+          ],
+          notesHint: "Override decision, group scope..."
+        }
+      ]
+    },
+
+    {
+      phase: "3) Migrate Workspaces (the actual move)",
+      items: [
+        {
+          id: "m1",
+          title: "Inventory workspaces on Premium capacity and choose migration method per wave",
+          why: "Migration is workspace reassignment; waves reduce risk and make validation manageable.",
+          helper: [
+            "List all workspaces currently assigned to Premium capacity.",
+            "Classify by criticality (business critical, large models, gateway dependencies).",
+            "Choose method: individual assignment, Admin portal bulk assignment, or REST API."
+          ],
+          validate: [
+            "Inventory complete.",
+            "Wave plan includes method and executor per wave."
+          ],
+          notesHint: "Inventory link, wave plan..."
+        },
+        {
+          id: "m2",
+          title: "Bulk assign workspaces to Fabric capacity (avoid 'entire organization' unless intended)",
+          why: "Bulk assignment can be done in Admin portal; moving the entire organization at once is usually risky.",
+          helper: [
+            "Admin portal → Capacity settings → select Fabric capacity.",
+            "Workspaces assigned → Assign workspaces.",
+            "Choose: by users, specific workspaces (preferred), or entire organization (use only if truly intended).",
+            "Apply."
+          ],
+          validate: [
+            "Bulk assignment applied successfully.",
+            "Pilot wave moved first."
+          ],
+          notesHint: "Which bulk option, users/workspaces list..."
+        },
+        {
+          id: "m3",
+          title: "Ensure workspaces are idle (downtime planning)",
+          why: "Reassignment should be done when workspace is not actively running jobs.",
+          helper: [
+            "Schedule moves outside refresh/pipeline windows.",
+            "If necessary, migrate different workspaces at different times as they become idle."
+          ],
+          validate: [
+            "No active runs during reassignment windows.",
+            "Cutover windows documented."
+          ],
+          notesHint: "Downtime schedule..."
+        },
+        {
+          id: "m4",
+          title: "Post-move: handle job behavior (rerun canceled active jobs; verify schedules)",
+          why: "Active jobs may be canceled during reassignment; scheduled jobs typically remain scheduled.",
+          helper: [
+            "After moving, check refresh history and pipelines/jobs.",
+            "Rerun any jobs that were active and canceled during cutover.",
+            "Confirm next scheduled refresh triggers normally."
+          ],
+          validate: [
+            "Post-move refresh/pipelines succeed.",
+            "Next scheduled runs occur normally."
+          ],
+          notesHint: "Canceled jobs, reruns, incidents..."
+        },
+        {
+          id: "m5",
+          title: "Validate assignment in Admin portal (refresh and confirm workspaces listed)",
+          why: "Confirm migrated workspaces appear under 'Workspaces assigned to this capacity'.",
+          helper: [
+            "Admin portal → Capacity settings → select Fabric capacity.",
+            "Workspaces assigned: refresh the page.",
+            "Confirm expected workspaces are listed."
+          ],
+          validate: [
+            "All expected workspaces listed under Fabric capacity.",
+            "No critical workspaces remain on old capacity."
+          ],
+          notesHint: "Evidence/screenshot notes..."
+        }
+      ]
+    },
+
+    {
+      phase: "4) Post-migration validation & closeout",
+      items: [
+        {
+          id: "p1x",
+          title: "Functional testing: reports, refresh, security, gateways, XMLA scenarios",
+          why: "Confirm parity after reassignment using a defined test pack.",
+          helper: [
+            "Select a test pack: top reports + top semantic models.",
+            "Run refresh for 2–3 cycles and compare duration/success.",
+            "Validate RLS/OLS and user access.",
+            "Validate gateway scenarios (if used) and XMLA tooling (if applicable)."
+          ],
+          validate: [
+            "Key reports load within expected thresholds.",
+            "Refresh succeeds repeatedly.",
+            "Security/access checks pass."
+          ],
+          notesHint: "Test results, issues, fixes..."
+        },
+        {
+          id: "p2x",
+          title: "Monitor capacity usage and tune schedules / models",
+          why: "After migration, validate health and performance and adjust if needed.",
+          helper: [
+            "Review capacity usage patterns and peaks.",
+            "Identify top workspaces/models by load.",
+            "Optimize models and adjust refresh schedules to reduce contention."
+          ],
+          validate: [
+            "No unexpected throttling on critical workloads.",
+            "Before/after baseline captured."
+          ],
+          notesHint: "Metrics, tuning actions..."
+        },
+        {
+          id: "p3x",
+          title: "Closeout: decommission/stop paying for old capacity after sign-off",
+          why: "Once everything is migrated and validated, proceed with old capacity retirement per your contract timeline.",
+          helper: [
+            "Confirm all required workspaces migrated and stable.",
+            "Collect stakeholder sign-off.",
+            "Proceed with cancellation/end-of-term actions."
+          ],
+          validate: [
+            "Sign-off recorded.",
+            "No remaining critical workspace on old capacity."
+          ],
+          notesHint: "Sign-off, final date..."
+        }
+      ]
+    }
+  ];
+
+  // =========================
+  // RENDER
+  // =========================
+  const contentEl = document.getElementById("content");
+
+  function render() {
+    contentEl.innerHTML = "";
+
+    SECTIONS.forEach((section, sIdx) => {
+      const card = document.createElement("div");
+      card.className = "card shadow-sm mb-3";
+      card.innerHTML = `
+        <div class="card-body p-3 p-md-4">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <h4 class="m-0">${escapeHtml(section.phase)}</h4>
+            <span class="badge text-bg-light" id="badge-${sIdx}"></span>
+          </div>
+          <div id="section-${sIdx}"></div>
+        </div>
+      `;
+      contentEl.appendChild(card);
+
+      const sectionEl = card.querySelector(`#section-${sIdx}`);
+
+      section.items.forEach((item, iIdx) => {
+        const collapseId = `collapse-${sIdx}-${iIdx}`;
+        const box = document.createElement("div");
+        box.className = "step-box mt-3";
+        box.innerHTML = `
+          <div class="d-flex align-items-start gap-3">
+            <input class="form-check-input mt-1" type="checkbox" id="check-${item.id}">
+            <div class="flex-grow-1">
+              <label class="form-check-label fw-semibold" for="check-${item.id}">
+                ${escapeHtml(item.title)}
+              </label>
+              <div class="small-muted mt-1">${escapeHtml(item.why)}</div>
+
+              <div class="mt-3">
+                <label class="form-label small-muted mb-1">Comments (risks, owners, decisions, links)</label>
+                <textarea class="form-control" rows="2" id="txt-${item.id}" placeholder="${escapeHtml(item.notesHint || "Comments...")}"></textarea>
+              </div>
+
+              <div class="mt-3">
+                <button class="btn btn-outline-secondary btn-sm" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#${collapseId}"
+                  aria-expanded="false" aria-controls="${collapseId}">
+                  Show validation steps
+                </button>
+
+                <div class="collapse mt-3" id="${collapseId}">
+                  <div class="helper-box">
+                    <div class="fw-semibold mb-2">What to do (step-by-step)</div>
+                    <ul class="mb-3">
+                      ${(item.helper || []).map(h => `<li>${escapeHtml(h)}</li>`).join("")}
+                    </ul>
+
+                    <div class="fw-semibold mb-2">How to validate</div>
+                    <ul class="mb-0">
+                      ${(item.validate || []).map(v => `<li>${escapeHtml(v)}</li>`).join("")}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-nowrap">
+              <span class="badge text-bg-secondary" id="status-${item.id}">Open</span>
+            </div>
+          </div>
+        `;
+        sectionEl.appendChild(box);
+      });
+    });
+
+    wireUp();
+    updateUI();
+  }
+
+  // =========================
+  // STATE
+  // =========================
+  function getState() {
+    const checked = {};
+    const comments = {};
+    SECTIONS.flatMap(s => s.items).forEach(item => {
+      checked[item.id] = document.getElementById(`check-${item.id}`)?.checked || false;
+      comments[item.id] = document.getElementById(`txt-${item.id}`)?.value || "";
+    });
+    return { checked, comments };
+  }
+
+  function setState(state) {
+    SECTIONS.flatMap(s => s.items).forEach(item => {
+      const cb = document.getElementById(`check-${item.id}`);
+      const tx = document.getElementById(`txt-${item.id}`);
+      if (cb && state?.checked && typeof state.checked[item.id] === "boolean") cb.checked = state.checked[item.id];
+      if (tx && state?.comments && typeof state.comments[item.id] === "string") tx.value = state.comments[item.id];
+    });
+  }
+
+  // =========================
+  // UI
+  // =========================
+  function updateUI() {
+    const items = SECTIONS.flatMap(s => s.items);
+    const done = items.filter(i => document.getElementById(`check-${i.id}`)?.checked).length;
+    const total = items.length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+
+    document.getElementById("doneCount").textContent = done;
+    document.getElementById("totalCount").textContent = total;
+    document.getElementById("progressPct").textContent = `${pct}%`;
+
+    const bar = document.getElementById("progressBar");
+    bar.style.width = `${pct}%`;
+    bar.setAttribute("aria-valuenow", pct);
+
+    SECTIONS.forEach((section, sIdx) => {
+      const sectionDone = section.items.filter(i => document.getElementById(`check-${i.id}`)?.checked).length;
+      const badge = document.getElementById(`badge-${sIdx}`);
+      if (badge) badge.textContent = `${sectionDone}/${section.items.length} done`;
+    });
+
+    items.forEach(item => {
+      const isDone = document.getElementById(`check-${item.id}`)?.checked;
+      const status = document.getElementById(`status-${item.id}`);
+      if (status) {
+        status.textContent = isDone ? "Done" : "Open";
+        status.className = `badge ${isDone ? "text-bg-success" : "text-bg-secondary"}`;
+      }
+    });
+  }
+
+  function wireUp() {
+    // live progress updates
+    SECTIONS.flatMap(s => s.items).forEach(item => {
+      document.getElementById(`check-${item.id}`).addEventListener("change", updateUI);
+      document.getElementById(`txt-${item.id}`).addEventListener("input", () => {});
+    });
+
+    // buttons
+    document.getElementById("btnExportPdf").addEventListener("click", exportStyledPdf);
+    document.getElementById("btnExportJson").addEventListener("click", exportJsonFile);
+    document.getElementById("btnExportCsv").addEventListener("click", exportCsvFile);
+
+    document.getElementById("fileImportJson").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await importJsonFile(file);
+      e.target.value = ""; // allow re-import same file
+    });
+  }
+
+  // =========================
+  // EXPORT / IMPORT
+  // =========================
+  function exportJsonFile() {
+    const payload = {
+      meta: {
+        schema: "fabric-migration-checklist-v1",
+        companyName: BRAND.companyName,
+        exportedAt: new Date().toISOString()
+      },
+      state: getState()
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    downloadBlob(blob, "Fabric_Migration_Checklist.json");
+  }
+
+  async function importJsonFile(file) {
+    const text = await file.text();
+    let payload;
+    try { payload = JSON.parse(text); }
+    catch { alert("Invalid JSON file."); return; }
+
+    if (!payload?.state?.checked || !payload?.state?.comments) {
+      alert("JSON does not contain expected data (state.checked/state.comments).");
+      return;
+    }
+
+    setState(payload.state);
+    updateUI();
+    alert("Imported JSON successfully.");
+  }
+
+  function exportCsvFile() {
+    const { checked, comments } = getState();
+    const rows = [];
+    rows.push(["phase", "step_id", "title", "status", "comments"]);
+
+    for (const section of SECTIONS) {
+      for (const item of section.items) {
+        rows.push([
+          section.phase,
+          item.id,
+          item.title,
+          checked[item.id] ? "done" : "open",
+          (comments[item.id] || "").replaceAll("\n", " ")
+        ]);
+      }
+    }
+
+    const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, "Fabric_Migration_Checklist.csv");
+  }
+
+  function csvEscape(value) {
+    const s = String(value ?? "");
+    if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+      return `"${s.replaceAll('"', '""')}"`;
+    }
+    return s;
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // =========================
+  // STYLED PDF EXPORT (captures HTML)
+  // =========================
+  async function exportStyledPdf() {
+    const expandHelpers = document.getElementById("expandForPdf").checked;
+    const collapses = Array.from(document.querySelectorAll(".collapse"));
+    const prevStates = collapses.map(el => el.classList.contains("show"));
+
+    if (expandHelpers) collapses.forEach(el => el.classList.add("show"));
+
+    updateUI();
+
+    const root = document.getElementById("printRoot");
+    const canvas = await html2canvas(root, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: null,
+      scrollY: -window.scrollY
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "pt", "a4");
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let y = 0;
+    let remaining = imgHeight;
+
+    while (remaining > 0) {
+      pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
+      remaining -= pageHeight;
+
+      if (remaining > 0) {
+        pdf.addPage();
+        y -= pageHeight; // shift up for next slice
+      }
+    }
+
+    pdf.save("Fabric_Migration_Checklist_Styled.pdf");
+
+    // Restore collapse states
+    collapses.forEach((el, idx) => {
+      if (prevStates[idx]) el.classList.add("show");
+      else el.classList.remove("show");
+    });
+  }
+
+  // =========================
+  // UTIL + INIT
+  // =========================
+  function escapeHtml(str) {
+    return String(str || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  // Logo init (optional)
+  (function initLogo(){
+    const img = document.getElementById("logoImg");
+    const ph = document.getElementById("logoPlaceholder");
+    img.src = BRAND.logoFile;
+    img.onload = () => { img.classList.remove("d-none"); ph.classList.add("d-none"); };
+    img.onerror = () => { /* keep placeholder */ };
+  })();
+
+  // Initial render
+  render();
+</script>
+</body>
+</html>
