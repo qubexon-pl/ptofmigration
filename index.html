@@ -70,6 +70,10 @@
           <div class="badge brand-badge rounded-pill px-3 py-2 mb-2">Migration Manual</div>
           <h3 class="m-0" id="programTitle">Premium Per Capacity ➜ Microsoft Fabric Capacity</h3>
           <div class="small-muted">Static checklist + step-by-step validation. Export/Import via files. Styled PDF export keeps layout.</div>
+          <label class="btn btn-sm btn-outline-secondary mt-2 mb-0">
+            Upload Logo
+            <input id="fileLogoUpload" type="file" accept="image/*" hidden>
+          </label>
         </div>
       </div>
 
@@ -857,6 +861,22 @@
   (function initLogo(){
     const img = document.getElementById("logoImg");
     const ph = document.getElementById("logoPlaceholder");
+    const input = document.getElementById("fileLogoUpload");
+
+    function showLogo(src) {
+      img.src = src;
+      img.classList.remove("d-none");
+      ph.classList.add("d-none");
+    }
+
+    input.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => showLogo(reader.result);
+      reader.readAsDataURL(file);
+    });
+
     const logoUrl = new URL(BRAND.logoFile, document.baseURI);
     const isHttpLogo = logoUrl.protocol === "http:" || logoUrl.protocol === "https:";
 
@@ -867,9 +887,9 @@
       img.referrerPolicy = "no-referrer";
     }
 
-    img.src = logoUrl.href;
-    img.onload = () => { img.classList.remove("d-none"); ph.classList.add("d-none"); };
+    img.onload = () => showLogo(img.src);
     img.onerror = () => { /* keep placeholder */ };
+    img.src = logoUrl.href;
   })();
 
   // Initial render
